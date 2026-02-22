@@ -5,7 +5,6 @@ from rich.console import Console
 
 from erd_agent.config import settings
 from erd_agent.repo import prepare_repo
-from erd_agent.scanner import scan_repo, find_enum_type_names_in_entity_text, find_enum_definition_files
 from erd_agent.model import Schema
 from erd_agent.normalize import normalize_schema
 from erd_agent.dbml_writer import write_dbml
@@ -16,6 +15,14 @@ from erd_agent.llm.schema_refiner import refine_schema_with_aoai
 
 # ✅ AI-first extractor
 from erd_agent.llm.jpa_ai_extractor import ai_extract_schema
+
+from erd_agent.scanner import (
+    scan_repo,
+    find_enum_type_names_in_entity_text,
+    find_enum_definition_files,
+    find_embedded_id_type_names_in_entity_text,   # ✅ 추가
+    find_embeddable_definition_files,             # ✅ 추가
+)
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -51,14 +58,24 @@ def generate(
 
         # @Enumerated(EnumType.STRING) enum 타입 이름 모아서 enum 정의 파일도 추가
         enum_names = set()
+        embedded_id_names = set()
+
         for _, txt in entity_texts:
             enum_names |= find_enum_type_names_in_entity_text(txt)
+            embedded_id_names |= find_embedded_id_type_names_in_entity_text(txt)
+
 
         enum_files = find_enum_definition_files(repo_path, enum_names)
-        enum_texts = [(f.relative_to(repo_path), load_text(f)) for f in enum_files]
+        embeddable_files = find_embeddable_definition_files(repo_path, embedded_id_names)
 
-        all_inputs = entity_texts + enum_texts
-        console.print(f"AI input files: entities={len(entity_texts)}, enums={len(enum_texts)}")
+        enum_texts = [(f.relative_to(repo_path), load_text(f)) for f in enum_files]
+        embeddable_texts = [(f.relative_to(repo_path), load_text(f)) for f in embeddable_files]
+
+        all_inputs = entity_texts + enum_texts + embeddable_texts
+
+        console.print(
+            f"AI input files: entities={len(entity_texts)}, enums={len(enum_texts)}, embeddables={len(embeddable_texts)}"
+        )
 
         schema = ai_extract_schema([(repo_path / p, txt) for p, txt in all_inputs])
 

@@ -16,6 +16,15 @@ TABLE_ANN_RE = re.compile(r"@\s*Table\b")  # 보조 신호(테이블명 추출�
 ENUM_DEF_RE = re.compile(r"\benum\s+([A-Z]\w*)\b")
 ENUM_FIELD_RE = re.compile(r"@Enumerated\s*\(\s*EnumType\.STRING\s*\)\s*@Column[^{;]*\s+private\s+([A-Z]\w*)\s+\w+\s*;", re.DOTALL)
 
+# @EmbeddedId private PayId id;
+EMBEDDED_ID_TYPE_RE = re.compile(r"@EmbeddedId\b[\s\S]{0,200}?\bprivate\s+([A-Z]\w*)\s+\w+\s*;", re.MULTILINE)
+
+# @Embeddable class PayId { ... }
+EMBEDDABLE_CLASS_RE = re.compile(r"@Embeddable\b[\s\S]{0,200}?\bclass\s+([A-Z]\w*)\b", re.MULTILINE)
+
+# record 지원(프로젝트에 record로 키 클래스 쓰는 경우가 있으면 도움이 됨)
+EMBEDDABLE_RECORD_RE = re.compile(r"@Embeddable\b[\s\S]{0,200}?\brecord\s+([A-Z]\w*)\b", re.MULTILINE)
+
 @dataclass
 class ScanConfig:
     prefer_dirs: tuple[str, ...] = ("models", "model", "entity", "entities", "domain")
@@ -92,3 +101,35 @@ def scan_repo(repo_path: Path, cfg: ScanConfig | None = None) -> List[Path]:
         consider_file(f)
 
     return sorted(candidates)
+
+def find_embedded_id_type_names_in_entity_text(text: str) -> Set[str]:
+    """
+    Entity 파일에서 @EmbeddedId 타입명(PayId 등)을 추출.
+    """
+    return set(EMBEDDED_ID_TYPE_RE.findall(text))
+
+def find_embeddable_definition_files(repo_path: Path, class_names: Set[str]) -> List[Path]:
+    """
+    @Embeddable 클래스 정의 파일을 찾아 AI 입력에 포함시키기 위한 함수.
+    """
+    if not class_names:
+        return []
+    hits: Set[Path] = set()
+    for f in repo_path.rglob("*.java"):
+        if not f.is_file():
+            continue
+        try:
+            t = f.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+
+        # 빠른 필터: 이름이 없으면 skip
+        # (큰 레포에서 비용 감소)
+        if not any(name in t for name in class_names):
+            continue
+
+        for name in class_names:
+            if re.search(rf"@Embeddable\b[\s\S]{{0,300}}?\b(class|record)\s+{re.escape(name)}\b", t):
+                hits.add(f)
+                break
+    return sorted(hits)
