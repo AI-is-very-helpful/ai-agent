@@ -30,4 +30,3 @@ def write_summary_md(schema: Schema, out_path: Path) -> Path:
 
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
-``

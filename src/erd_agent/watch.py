@@ -55,4 +55,3 @@ def watch(
     finally:
         obs.stop()
         obs.join()
-``
