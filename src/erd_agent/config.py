@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     azure_openai_endpoint: str | None = Field(default=None, alias="AZURE_OPENAI_ENDPOINT")
     azure_openai_api_key: str | None = Field(default=None, alias="AZURE_OPENAI_API_KEY")
-    openai_api_version: str = Field(default="2023-09-01-preview", alias="OPENAI_API_VERSION")
+    openai_api_version: str = Field(default="2024-06-01", alias="OPENAI_API_VERSION")
     azure_openai_deployment: str | None = Field(default=None, alias="AZURE_OPENAI_DEPLOYMENT")
 
 settings = Settings()

@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
+from typing import Set
 import re
 
 # 파일명 힌트: *Entity.java
@@ -11,11 +12,35 @@ ENTITY_NAME_RE = re.compile(r".*Entity\.java$", re.IGNORECASE)
 ENTITY_ANN_RE = re.compile(r"@\s*Entity\b")
 TABLE_ANN_RE = re.compile(r"@\s*Table\b")  # 보조 신호(테이블명 추출용)
 
+# Enum
+ENUM_DEF_RE = re.compile(r"\benum\s+([A-Z]\w*)\b")
+ENUM_FIELD_RE = re.compile(r"@Enumerated\s*\(\s*EnumType\.STRING\s*\)\s*@Column[^{;]*\s+private\s+([A-Z]\w*)\s+\w+\s*;", re.DOTALL)
+
 @dataclass
 class ScanConfig:
     prefer_dirs: tuple[str, ...] = ("models", "model", "entity", "entities", "domain")
     exts: tuple[str, ...] = (".java",)
     include_table_only: bool = False  # 레거시 대응 옵션(기본 False)
+
+def find_enum_type_names_in_entity_text(text: str) -> Set[str]:
+    # @Enumerated(EnumType.STRING) 필드에서 enum 타입 이름만 추출
+    return set(ENUM_FIELD_RE.findall(text))
+
+def find_enum_definition_files(repo_path: Path, enum_names: Set[str]) -> list[Path]:
+    # enum Role { ... } 정의가 들어있는 파일을 찾아 추가 입력으로 사용
+    if not enum_names:
+        return []
+    hits = []
+    for f in repo_path.rglob("*.java"):
+        try:
+            t = f.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        for name in enum_names:
+            if re.search(rf"\benum\s+{re.escape(name)}\b", t):
+                hits.append(f)
+                break
+    return sorted(set(hits))
 
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")

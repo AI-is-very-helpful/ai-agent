@@ -20,14 +20,28 @@ def col_settings(c: Column) -> str:
 
 def to_dbml(schema: Schema) -> str:
     lines: list[str] = []
+
+    # ✅ Enums 먼저 출력
+    for ename, enum in sorted(schema.enums.items()):
+        lines.append(f"Enum {ename} {{")
+        for v in enum.values:
+            # 값에 공백/특수문자 있으면 따옴표 필요할 수 있음(간단히 안전 처리)
+            safe = f"\"{v}\"" if any(ch.isspace() for ch in v) else v
+            lines.append(f"  {safe}")
+        if enum.note:
+            lines.append(f"  Note: '{enum.note}'")
+        lines.append("}\n")
+
+    # Tables
     for tname, table in sorted(schema.tables.items()):
-        lines.append(f"Table {tname} {{")  # schema.table도 허용 [1](https://dbml.dbdiagram.io/docs/)
+        lines.append(f"Table {tname} {{")
         for _, col in sorted(table.columns.items(), key=lambda kv: (not kv[1].pk, kv[0])):
             lines.append(f"  {col.name} {col.db_type}{col_settings(col)}")
         if table.note:
             lines.append(f"  Note: '{table.note}'")
         lines.append("}\n")
 
+    # Refs
     for r in schema.refs:
         lines.append(f"Ref: {r.child_table}.{r.child_column} {r.rel} {r.parent_table}.{r.parent_column}")
 
