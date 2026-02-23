@@ -1,7 +1,11 @@
 .env
-
 out/
-
+.cache/
 __pycache__/
-
 *.egg-info/
+*.pyc
+dist/
+build/
+.venv/
+.DS_Store
+*.log

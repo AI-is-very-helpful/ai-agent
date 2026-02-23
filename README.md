@@ -1,156 +1,240 @@
-# ERD Agent (AI‑First JPA ERD Generator)
+# Doc Agent — 레포 하나로 프로젝트 전체 문서화
 
-Java JPA 기반 프로젝트를 분석하여  
-**dbdiagram.io에서 바로 시각화 가능한 DBML ERD**를 생성하는 도구입니다.
+Git 레포(로컬 경로 또는 URL)를 주면 Azure OpenAI가 소스코드를 분석해서
+**5가지 문서**를 자동으로 생성합니다.
 
-이 도구는 두 가지 분석 모드를 제공합니다.
-
-- ✅ **정적 분석 모드 (기본)**: Python 기반 JPA 파서
-- ✅ **AI‑First 모드 (옵션)**: Azure AI Foundry / GPT‑4.1 기반 의미 분석
-
----
-
-## ✨ 주요 특징
-
-- ✅ Java JPA Entity 자동 스캔 (`@Entity`)
-- ✅ 컬럼, PK, FK, Join Table 자동 추출
-- ✅ DBML 포맷 ERD 생성
-- ✅ ERD 요약 Markdown 문서 생성
-- ✅ **AI‑First 모드로 Enum / 도메인 의미 해석**
-- ✅ GitHub Repository 직접 분석 지원
+| 문서 | 출력 | 설명 |
+|------|------|------|
+| **ERD** | `database.dbml` + `erd_summary.md` | JPA Entity → DBML (dbdiagram.io 호환) |
+| **API 스펙** | `api_spec.md` | Controller 엔드포인트 · 파라미터 · 요청/응답 |
+| **아키텍처** | `architecture.md` | 레이어/모듈/외부 시스템 + Mermaid 다이어그램 |
+| **DDL** | `schema.sql` | JPA → CREATE TABLE SQL |
+| **기술 스택** | `tech_stack.md` | 언어 · 프레임워크 · 의존성 카테고리별 정리 |
 
 ---
 
-## 🔀 분석 모드 개요
-
-### 1️⃣ 정적 분석 모드 (기본)
+## Quick Start
 
 ```bash
-erd-agent <repo-path-or-git-url>
-```
-
-- Python AST + 규칙 기반 분석
-- 빠르고 비용 없음
-- 항상 동일한 결과 (deterministic)
-- 한계:
-  - Enum 의미
-  - 도메인 의도
-  - 복합 관계 추론 → 제한적
-
----
-
-### 2️⃣ AI‑First 분석 모드 (권장)
-```shell
-erd-agent <repo-path-or-git-url> --ai-first
-```
-
-- Azure AI Foundry + GPT‑4.1
-- 정적 분석을 완전히 건너뜀
-- 코드 전체 맥락을 이해하여 ERD 생성
-- Enum, Value Object, Join 의도까지 해석
-
-✅ Python은 DBML 생성만 담당
-✅ 구조 결정은 AI가 담당
-
----
-## 🤖 AI‑First 모드에서 AI가 하는 일
-AI는 다음을 수행합니다:
-
-@Enumerated(EnumType.STRING) → Enum 정의 생성
-Enum 값 목록 추출
-관계 의도 해석
-
-Many‑to‑Many vs Join Entity
-
-
-컬럼 타입의 도메인 의미 보정
-ERD 관점에서 더 적절한 구조 선택
-
-Python은:
-
-AI가 반환한 구조화 JSON 검증
-DBML 문법으로 변환
-결과 파일 생성
-
----
-
-## 📁 프로젝트 구조
-src/erd_agent/
-├─ agent.py                 # CLI 진입점
-├─ scanner.py               # Entity / Enum 후보 파일 탐색
-├─ parsers/
-│  └─ jpa_java.py           # 정적 JPA 파서
-├─ llm/
-│  ├─ jpa_ai_extractor.py   # ✅ AI‑First 분석기
-│  ├─ schema_models.py      # AI 출력 JSON 스키마
-│  └─ aoai_client.py        # Azure AI Foundry / OpenAI client
-├─ model.py                 # Schema / Table / Column / Enum 모델
-├─ normalize.py             # 스키마 정합성 보정
-├─ dbml_writer.py           # DBML 생성
-├─ docs_writer.py           # ERD 요약 문서 생성
-└─ repo.py                  # Git clone / local repo 처리
-
----
-
-## ⚙️ 설치
-```shell
-
+# 1. 설치
 git clone <this-repo>
-cd erd-agent
+cd doc-agent
 pip install -e .
 
+# 2. Azure OpenAI 설정
+cp .env.example .env
+# .env에 AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT 입력
+
+# 3. 실행
+ai-agent https://github.com/your-org/your-project.git
 ```
-Python 3.12 이상 권장
+
+`out/` 디렉터리에 5가지 문서가 생성됩니다.
 
 ---
 
-## 🔑 Azure AI Foundry 설정 (AI‑First 모드)
-AI‑First 모드는 Azure AI Foundry를 사용합니다.
+## 사용법
 
-### ✅ 필수 환경 변수
-```
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_ENDPOINT=https://<resource-name>.openai.azure.com
-AZURE_OPENAI_DEPLOYMENT=<deployment-name>
-```
-⚠️ 주의 사항
+### ai-agent (권장) — 플래그로 선택
 
-model 이름 ❌ → deployment 이름 ✅
-Foundry 사용 시 /openai/v1 엔드포인트 사용
-OpenAI SDK(v1) 기반 호출
+```bash
+# 전체 문서 생성 (플래그 없으면 전부)
+ai-agent ./my-project
+ai-agent https://github.com/org/repo.git
+
+# 원하는 문서만 선택
+ai-agent --erd --api ./my-project
+ai-agent --api --arch --stack ./my-project
+ai-agent -e -a -d ./my-project     # 단축: -e=erd, -a=api, -d=ddl, -s=stack
+```
+
+| 플래그 | 단축 | 문서 |
+|--------|------|------|
+| `--erd` | `-e` | ERD (DBML + 요약) |
+| `--api` | `-a` | API 스펙 |
+| `--arch` | | 아키텍처 다이어그램 |
+| `--ddl` | `-d` | DDL (SQL) |
+| `--stack` | `-s` | 기술 스택 |
+
+ERD 전용: `--ai-first` (AI 전체 분석), `--use-aoai` (정적 결과 AI 보정)
+
+### 개별 에이전트
+
+```bash
+erd-agent ./my-project
+api-agent ./my-project
+arch-agent ./my-project
+ddl-agent ./my-project
+stack-agent ./my-project
+```
+
+### doc-agent (서브커맨드)
+
+```bash
+doc-agent all ./my-project
+doc-agent erd ./my-project
+doc-agent api ./my-project
+```
 
 ---
 
-## 🚀 사용 예시
-### 정적 분석
-```shell
-erd-agent ./my-jpa-project
-```
+## 출력 구조
 
-### AI‑First 분석
-```shell
-erd-agent ./my-jpa-project --ai-first
 ```
-
-### 결과
 out/
-├─ database.dbml
-└─ erd_summary.md
+├── erd/           database.dbml, erd_summary.md
+├── api/           api_spec.md
+├── arch/          architecture.md
+├── ddl/           schema.sql
+└── stack/         tech_stack.md
+```
+
+출력 위치는 환경변수 `DOC_OUTPUT_DIR`로 변경 가능 (기본: `./out`).
 
 ---
 
-## 🧠 동작 원리 (Architecture 요약)
-Repository
-   ↓
-Python (Scanner)
-   ↓
-[ AI‑First Mode ]
-   ↓
-Azure AI Foundry (GPT‑4.1)
-   ↓
-Structured JSON Schema
-   ↓
-Python (DBML Writer)
-   ↓
-ERD (DBML)
+## 각 에이전트가 하는 일
 
+### ERD Agent
+
+```
+JPA Entity 파일 스캔 (@Entity, @Table)
+  → Enum / EmbeddedId 정의 파일 추가 수집
+  → Azure OpenAI: 테이블·컬럼·PK·FK·Enum 추출 (JSON)
+  → Pydantic 검증 → DBML + 요약 MD
+```
+
+정적 분석 모드(기본)도 지원: Python JPA 파서가 AST 기반으로 추출.
+
+### API Agent
+
+```
+Controller 파일 스캔 (@RestController, @Controller, *Controller.java)
+  → Azure OpenAI: 엔드포인트·HTTP 메서드·파라미터·요청/응답 추출 (JSON)
+  → Pydantic 검증 → Markdown API 스펙
+```
+
+### Architecture Agent
+
+```
+설정 파일 수집 (pom.xml, application.yml, Dockerfile, ...)
+  + 아키텍처 힌트 파일 (@SpringBootApplication, @Service, ...)
+  + 디렉터리 트리 생성
+  → Azure OpenAI: 레이어·모듈·외부 시스템·Mermaid 다이어그램 (JSON)
+  → Pydantic 검증 → Markdown + Mermaid
+```
+
+### DDL Agent
+
+```
+JPA Entity 스캔 (ERD Agent와 동일한 스캐너)
+  → Azure OpenAI: CREATE TABLE DDL 생성 (JSON)
+  → Pydantic 검증 → SQL 파일 (MySQL/PostgreSQL 자동 감지)
+```
+
+### Stack Agent
+
+```
+빌드/의존성 파일 수집 (pom.xml, build.gradle, package.json, ...)
+  → Azure OpenAI: 언어·프레임워크·의존성 분류 (JSON)
+  → Pydantic 검증 → Markdown 기술 스택 문서
+```
+
+---
+
+## 프로젝트 구조
+
+```
+src/
+├── erd_agent/              # 코어 + ERD 에이전트
+│   ├── cli.py              # ai-agent · doc-agent · *-agent 진입점
+│   ├── config.py           # 환경 설정 (공용)
+│   ├── repo.py             # Git clone / 로컬 경로 처리 (공용)
+│   ├── scanner.py          # JPA Entity/Enum/Embeddable 스캐너
+│   ├── commands/erd.py     # ERD 생성 로직
+│   ├── parsers/jpa_java.py # 정적 JPA 파서
+│   ├── llm/
+│   │   ├── aoai_client.py  # Azure OpenAI 클라이언트 (공용)
+│   │   ├── jpa_ai_extractor.py
+│   │   ├── schema_models.py
+│   │   └── schema_refiner.py
+│   ├── model.py            # Schema/Table/Column/Ref 모델
+│   ├── normalize.py        # 스키마 정합성 보정
+│   ├── dbml_writer.py      # DBML 생성
+│   └── docs_writer.py      # ERD 요약 MD
+│
+├── api_agent/              # API 스펙 에이전트
+│   ├── scanner.py          # @RestController 파일 탐색
+│   ├── models.py           # Endpoint/Controller Pydantic 모델
+│   ├── extractor.py        # LLM 프롬프트 + 호출
+│   ├── writer.py           # Markdown 출력
+│   └── run.py              # run_api()
+│
+├── arch_agent/             # 아키텍처 에이전트
+│   ├── scanner.py          # 설정 파일 + 디렉터리 트리
+│   ├── models.py           # Layer/Dependency/Mermaid 모델
+│   ├── extractor.py        # LLM 프롬프트
+│   ├── writer.py           # Markdown + Mermaid 출력
+│   └── run.py              # run_arch()
+│
+├── ddl_agent/              # DDL 에이전트
+│   ├── models.py           # DDL Table/Column/Constraint 모델
+│   ├── extractor.py        # LLM 프롬프트
+│   ├── writer.py           # SQL 출력
+│   └── run.py              # run_ddl()
+│
+└── stack_agent/            # 기술 스택 에이전트
+    ├── scanner.py          # 빌드/의존성 파일 탐색
+    ├── models.py           # Stack/Category/Dependency 모델
+    ├── extractor.py        # LLM 프롬프트
+    ├── writer.py           # Markdown 출력
+    └── run.py              # run_stack()
+```
+
+---
+
+## 환경 변수
+
+| 변수 | 필수 | 설명 |
+|------|------|------|
+| `AZURE_OPENAI_ENDPOINT` | O | Azure OpenAI 엔드포인트 |
+| `AZURE_OPENAI_API_KEY` | O | API 키 |
+| `AZURE_OPENAI_DEPLOYMENT` | O | 배포 이름 (예: `gpt-4.1`) |
+| `OPENAI_API_VERSION` | | API 버전 (기본: `2024-06-01`) |
+| `GITHUB_TOKEN` | | private repo 접근용 |
+| `DOC_OUTPUT_DIR` | | 출력 디렉터리 (기본: `./out`) |
+| `CACHE_DIR` | | Git clone 캐시 (기본: `./.cache`) |
+
+---
+
+## 동작 흐름
+
+```
+레포 (경로 또는 Git URL)
+    │
+    ▼
+prepare_repo()  ─── Git URL이면 clone, 로컬이면 그대로
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  선택된 에이전트별 실행                   │
+│                                          │
+│  scan_*()  →  파일 수집                  │
+│      ↓                                   │
+│  ai_extract_*()  →  Azure OpenAI 호출    │
+│      ↓                                   │
+│  Pydantic 검증  →  구조화 데이터          │
+│      ↓                                   │
+│  write_*()  →  MD / SQL / DBML 출력      │
+└─────────────────────────────────────────┘
+    │
+    ▼
+out/erd/  out/api/  out/arch/  out/ddl/  out/stack/
+```
+
+---
+
+## 요구 사항
+
+- Python 3.12+
+- Azure OpenAI 리소스 (GPT-4.1 권장)

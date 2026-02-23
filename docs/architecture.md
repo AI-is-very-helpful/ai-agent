@@ -1,21 +1,85 @@
-# ERD Agent Architecture
+# Doc Agent — 아키텍처 문서
 
-## Goal
-GitHub(또는 로컬) 레포지토리의 소스코드에서 DB 관련 정의(Entity/Annotation 등)를 추출해
-dbdiagram.io에서 시각화 가능한 DBML을 생성한다.
+## 개요
 
-## Pipeline
-1) Scan: Entity 후보 파일 탐색 (xxEntity, models 폴더, @Table/@Entity 등)
-2) Parse: 언어/프레임워크별 Parser plugin으로 Schema 구성
-3) Normalize: naming/type/relationship 보정
-4) Emit: DBML(database.dbml) 출력
-5) Docs: ERD 요약/테이블 설명/변경 이력 문서 생성 (확장)
-6) Watch/CI: 변경 감지 후 자동 업데이트 (확장)
+Doc Agent는 Git 레포를 분석해 5종류의 프로젝트 문서를 자동 생성하는 CLI 도구입니다.
+각 문서 유형은 독립된 에이전트 패키지로 구현되어 있으며,
+공통 인프라(`config`, `repo`, `aoai_client`)를 공유합니다.
 
-## Modules
-- scanner.py: 후보 파일 탐지
-- parsers/: 언어/프레임워크별 추출기
-- model.py: Schema/Table/Column/Ref 데이터 모델
-- dbml_writer.py: DBML 생성기
-- llm/: Azure OpenAI 보정(선택)
-- watch.py: 파일 변경 감지 기반 자동 재생성
+## 아키텍처 스타일
+
+**Modular Monolith** — 하나의 패키지(`pip install -e .`)로 설치되지만,
+에이전트별로 패키지가 분리되어 독립적으로 개발/확장 가능합니다.
+
+## 구성
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   CLI Layer                          │
+│   ai-agent · doc-agent · erd-agent · api-agent ...  │
+│                  (erd_agent/cli.py)                  │
+└──────────┬──────────────────────────────┬───────────┘
+           │                              │
+     ┌─────▼──────┐  ┌────────┐ ┌────────▼────────┐
+     │ erd_agent   │  │ 공용    │ │  api_agent      │
+     │ commands/   │  │ config │ │  arch_agent     │
+     │ scanner     │  │ repo   │ │  ddl_agent      │
+     │ parsers     │  │ aoai   │ │  stack_agent    │
+     │ llm         │  │ client │ │                 │
+     │ model       │  └────────┘ │ scanner         │
+     │ dbml_writer │             │ models          │
+     │ normalize   │             │ extractor       │
+     └─────────────┘             │ writer          │
+                                 │ run             │
+                                 └─────────────────┘
+```
+
+## 에이전트별 파이프라인
+
+모든 에이전트가 동일한 4단계를 따릅니다:
+
+```
+1. scan_*()        — 레포에서 관련 파일 수집
+2. ai_extract_*()  — Azure OpenAI에 프롬프트 전송, JSON 응답
+3. Pydantic 검증   — 응답을 타입 안전하게 파싱
+4. write_*()       — 최종 문서 파일 출력 (MD / SQL / DBML)
+```
+
+### ERD Agent
+- 스캔: `@Entity`, `@Table`, Enum, `@Embeddable`
+- 출력: DBML (dbdiagram.io) + 요약 MD
+- 특이점: 정적 분석 모드(Python 파서) 별도 지원
+
+### API Agent
+- 스캔: `@RestController`, `@Controller`, `*Controller.java`
+- 출력: Markdown (엔드포인트 테이블, 파라미터, 요청/응답)
+
+### Architecture Agent
+- 스캔: `pom.xml`, `application.yml`, `Dockerfile`, `@SpringBootApplication` 등
+- 추가 입력: 디렉터리 트리 (depth 4)
+- 출력: Markdown + Mermaid 다이어그램
+
+### DDL Agent
+- 스캔: ERD Agent와 동일 (JPA Entity + Enum + Embeddable)
+- 출력: CREATE TABLE SQL (MySQL/PostgreSQL dialect 자동 감지)
+
+### Stack Agent
+- 스캔: `pom.xml`, `build.gradle`, `package.json`, `requirements.txt`, `Dockerfile`
+- 출력: Markdown (언어/프레임워크/의존성 카테고리)
+
+## 공용 모듈 (erd_agent)
+
+| 모듈 | 역할 |
+|------|------|
+| `config.py` | 환경 변수 로딩 (DOC_OUTPUT_DIR, AZURE_OPENAI_*, GITHUB_TOKEN) |
+| `repo.py` | `prepare_repo()` — 로컬 경로 또는 Git URL → 로컬 디렉터리 |
+| `llm/aoai_client.py` | `build_aoai_client()` — Azure OpenAI SDK 클라이언트 생성 |
+
+## 확장 방법
+
+새 문서 유형을 추가하려면:
+
+1. `src/새_agent/` 패키지 생성
+2. `scanner.py`, `models.py`, `extractor.py`, `writer.py`, `run.py` 작성
+3. `erd_agent/cli.py`에 CLI 연결
+4. `pyproject.toml`에 스크립트 등록

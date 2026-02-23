@@ -1,7 +1,7 @@
 [project]
-name = "erd-agent"
-version = "0.2.0"
-description = "Analyze JPA(Java) entities and generate DBML for dbdiagram.io"
+name = "doc-agent"
+version = "1.0.0"
+description = "Git 레포 하나로 프로젝트 전체 문서화 — API 스펙 · 아키텍처 · DDL · ERD · 기술 스택"
 requires-python = ">=3.12"
 dependencies = [
   "python-dotenv>=1.0.1",
@@ -12,11 +12,17 @@ dependencies = [
   "rich>=13.7.1",
   "typer>=0.12.3",
   "watchdog>=4.0.0",
-  "openai>=1.0.0",  # Azure OpenAI 옵션 사용 시
+  "openai>=1.0.0",
 ]
 
 [project.scripts]
-erd-agent = "erd_agent.agent:app"
+ai-agent = "erd_agent.cli:ai_agent"
+doc-agent = "erd_agent.cli:app"
+erd-agent = "erd_agent.cli:erd_app"
+api-agent = "erd_agent.cli:api_app"
+arch-agent = "erd_agent.cli:arch_app"
+ddl-agent = "erd_agent.cli:ddl_app"
+stack-agent = "erd_agent.cli:stack_app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
