@@ -24,18 +24,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      # ✅ 핵심: 배포 패키지에 포함될 위치(.python_packages)에 설치
+      
       - name: Install dependencies into .python_packages
         run: |
           python -m pip install --upgrade pip
           mkdir -p .python_packages/lib/site-packages
+
+          # 1) 외부 의존성 설치
           pip install -r requirements.txt --target=".python_packages/lib/site-packages"
+
+          # 2) 이 레포(= doc-agent 패키지) 자체를 target에 설치  ✅ 중요
+          pip install . --target=".python_packages/lib/site-packages"
 
       - name: Smoke test - import entrypoint module
         run: |
-          python -c "from erd_agent.cli import ai_agent; print('OK: import ai_agent')"
-
+          PYTHONPATH=.python_packages/lib/site-packages \
+            python -c "from erd_agent.cli import ai_agent; print('OK: import ai_agent')"
 
       # ✅ zip 만들기 (venv 등 불필요한 것 제외)
       - name: Create deployment zip
@@ -84,4 +88,5 @@ jobs:
           scm-do-build-during-deployment: false
           enable-oryx-build: false
           remote-build: false
+
 
