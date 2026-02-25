@@ -31,8 +31,11 @@ jobs:
           python -m pip install --upgrade pip
           mkdir -p .python_packages/lib/site-packages
           pip install -r requirements.txt --target=".python_packages/lib/site-packages"
-          python -c "import shutil; print('ai-agent:', shutil.which('ai-agent'))" || true
-          ai-agent --help | head -n 10 || true
+
+      - name: Smoke test - import entrypoint module
+        run: |
+          python -c "from erd_agent.cli import ai_agent; print('OK: import ai_agent')"
+
 
       # ✅ zip 만들기 (venv 등 불필요한 것 제외)
       - name: Create deployment zip
@@ -81,3 +84,4 @@ jobs:
           scm-do-build-during-deployment: false
           enable-oryx-build: false
           remote-build: false
+
