@@ -4,6 +4,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 import azure.functions as func
+import logging
 
 app = func.FunctionApp()
 
@@ -48,6 +49,8 @@ def _read_text_file(file_path: Path, max_chars: int = 250_000) -> str:
 
 @app.route(route="run", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
 def run(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info("run() called")
+    
     """
     POST /api/run
     body:
@@ -55,7 +58,9 @@ def run(req: func.HttpRequest) -> func.HttpResponse:
     """
     try:
         body = req.get_json()
+        logging.info(f"Request body: {body}")
     except Exception:
+        logging.exception("Unhandled exception in run()")
         return func.HttpResponse(
             json.dumps({"error": {"code": "BAD_JSON", "message": "Request body must be valid JSON"}}),
             status_code=400,
