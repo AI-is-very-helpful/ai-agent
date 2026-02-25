@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 import azure.functions as func
 import logging
+import sys
 
 app = func.FunctionApp()
 
@@ -36,6 +37,9 @@ MODE_TO_OUTPUT_FILES = {
         ("stack/tech_stack.md", "text/markdown"),
     ],
 }
+
+
+ENTRY_FUNC = "ai_agent"   # TOML: ai-agent = "erd_agent.cli:ai_agent"
 
 def _read_text_file(file_path: Path, max_chars: int = 250_000) -> str:
     """
@@ -95,7 +99,16 @@ def run(req: func.HttpRequest) -> func.HttpResponse:
     flag = MODE_TO_FLAG[mode]
 
     # README 사용법: ai-agent --xxx <repo> <out_dir> [1](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/build-a-bot)
-    cmd = ["ai-agent", flag, repo_url, str(out_dir)]
+    cmd = [
+        sys.executable, "-c",
+        (
+            "import sys; "
+            "from erd_agent.cli import ai_agent; "
+            # Typer/CLI가 sys.argv를 읽으므로 argv를 세팅
+            f"sys.argv=['ai-agent','{flag}','{repo_url}','{str(out_dir)}']; "
+            "ai_agent()"
+        )
+    ]
 
     # 환경 변수(Functions App Settings)로부터 필요한 값은
     # ai-agent 내부에서 읽도록 유지 (AZURE_OPENAI_* 등). [1](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/build-a-bot)
